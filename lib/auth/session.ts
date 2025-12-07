@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { GoogleAuthTokens } from './google-auth';
 
 const secret = new TextEncoder().encode(
@@ -16,7 +16,7 @@ export interface SessionData {
  * Create a session token with encrypted user data
  */
 export async function createSession(data: SessionData): Promise<string> {
-  const token = await new SignJWT(data)
+  const token = await new SignJWT(data as JWTPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
