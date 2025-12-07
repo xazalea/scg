@@ -4,65 +4,77 @@
 
 export const CLOUD_SHELL_CSS = `
   body {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background: #f5f5f5 !important;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+    color: #1a1a1a !important;
   }
   .cloudshell-container, .cloudshell-main, #cloudshell {
     border-radius: 12px !important;
-    box-shadow: 0 0 30px rgba(102, 126, 234, 0.5) !important;
-    background: rgba(17, 24, 39, 0.95) !important;
-    backdrop-filter: blur(10px) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    background: #ffffff !important;
+    border: 1px solid #e0e0e0 !important;
   }
   .terminal, .editor, .xterm, .xterm-screen, .xterm-viewport {
-    background: rgba(17, 24, 39, 0.95) !important;
+    background: #ffffff !important;
     border-radius: 8px !important;
+    border: 1px solid #e0e0e0 !important;
   }
   .xterm-viewport {
     background: transparent !important;
   }
   .xterm-cursor-layer {
-    background: rgba(102, 126, 234, 0.8) !important;
+    background: #1a1a1a !important;
   }
-  /* Hide Google branding */
+  /* Hide Google branding - monochrome style */
   .google-logo, [aria-label*="Google"], .gb_logo, .gb_ua, .gb_oa,
   .gb_1a, .gb_2a, .gb_3a, .gb_4a, .gb_5a, .gb_6a, .gb_7a, .gb_8a {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
   }
-  /* Custom scrollbar */
+  /* Custom scrollbar - monochrome */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 5px;
+    background: #f5f5f5;
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(102, 126, 234, 0.5);
-    border-radius: 5px;
+    background: #b0b0b0;
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(102, 126, 234, 0.7);
+    background: #808080;
   }
-  /* Improve terminal colors */
+  /* Terminal colors - monochrome */
   .xterm .xterm-screen {
-    background-color: rgba(17, 24, 39, 0.95) !important;
+    background-color: #ffffff !important;
   }
-  /* Add magic glow effect */
-  .cloudshell-main::before {
-    content: '';
-    position: absolute;
-    top: -2px;
-    left: -2px;
-    right: -2px;
-    bottom: -2px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 12px;
-    z-index: -1;
-    opacity: 0.3;
-    filter: blur(10px);
+  .xterm .xterm-text-layer {
+    color: #1a1a1a !important;
+  }
+  /* Buttons and controls */
+  button, .button, [role="button"] {
+    background: #1a1a1a !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 8px !important;
+  }
+  button:hover, .button:hover {
+    background: #2a2a2a !important;
+  }
+  /* Input fields */
+  input, textarea {
+    background: #ffffff !important;
+    border: 1px solid #e0e0e0 !important;
+    color: #1a1a1a !important;
+    border-radius: 8px !important;
+  }
+  input:focus, textarea:focus {
+    border-color: #1a1a1a !important;
+    outline: none !important;
   }
 `;
 
