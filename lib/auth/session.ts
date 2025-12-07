@@ -16,7 +16,7 @@ export interface SessionData {
  * Create a session token with encrypted user data
  */
 export async function createSession(data: SessionData): Promise<string> {
-  const token = await new SignJWT(data as JWTPayload)
+  const token = await new SignJWT(data as unknown as JWTPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
