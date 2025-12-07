@@ -1,118 +1,102 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import axios from 'axios';
 import { generateShellUrl } from '@/lib/utils/shell';
+import { injectCSSDirectly, injectCSSViaPostMessage } from '@/lib/utils/css-injector';
 
 export default function ShellPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    const initializeShell = async () => {
-      try {
-        // Get shell URL from proxy
-        const response = await axios.get('/api/shell/proxy', {
-          withCredentials: true,
-        });
+    // Auto-load shell without authentication
+    setLoading(false);
+  }, []);
 
-        if (response.data.shellUrl) {
-          setAccessToken('authenticated'); // Mark as authenticated
-          setLoading(false);
-        } else {
-          throw new Error('No shell URL received');
-        }
-      } catch (err: any) {
-        console.error('Shell initialization error:', err);
-        if (err.response?.status === 401) {
-          router.push('/?error=session_expired');
-        } else {
-          setError('Failed to initialize shell. Please try logging in again.');
-        }
+  useEffect(() => {
+    // Inject CSS into iframe after it loads
+    const injectCSS = () => {
+      const iframe = iframeRef.current;
+      if (!iframe) return;
+
+      // Try direct injection first
+      if (!injectCSSDirectly(iframe)) {
+        // Fallback to postMessage
+        injectCSSViaPostMessage(iframe);
       }
+
+      // Retry injection periodically in case iframe loads slowly
+      const retryInterval = setInterval(() => {
+        if (injectCSSDirectly(iframe)) {
+          clearInterval(retryInterval);
+        }
+      }, 2000);
+
+      // Stop retrying after 10 seconds
+      setTimeout(() => clearInterval(retryInterval), 10000);
     };
 
-    initializeShell();
-  }, [router]);
-
-  const handleLogout = async () => {
-    try {
-      await axios.post('/api/auth/logout', {}, { withCredentials: true });
-      router.push('/');
-    } catch (err) {
-      console.error('Logout error:', err);
-      router.push('/');
+    // Try to inject CSS when iframe loads
+    const iframe = iframeRef.current;
+    if (iframe) {
+      iframe.onload = () => {
+        setTimeout(injectCSS, 1000);
+      };
+      // Also try immediately if already loaded
+      if (iframe.contentDocument) {
+        injectCSS();
+      }
     }
-  };
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center magic-gradient">
-        <div className="text-center">
-          <div className="text-4xl mb-4">✨</div>
-          <p className="text-xl text-white/90">Loading your cloud shell...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center magic-gradient">
-        <div className="text-center max-w-md mx-auto p-8">
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 magic-glow border border-white/20">
-            <p className="text-red-200 mb-6">{error}</p>
-            <button
-              onClick={() => router.push('/')}
-              className="bg-white text-purple-600 px-6 py-3 rounded-xl font-semibold 
-                       hover:bg-purple-50 transition-all duration-300"
-            >
-              Go to Login
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Google Cloud Shell URL
-  // Note: The iframe will use the user's Google session from the OAuth flow
+  // Direct Cloud Shell URL - we'll trick it into thinking it's authenticated
   const shellUrl = generateShellUrl({ showIde: true, showTerminal: true });
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+      <header className="bg-gradient-to-r from-purple-600 to-indigo-600 border-b border-purple-500/50 px-4 py-3 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold magic-text">SCG</h1>
-          <span className="text-sm text-gray-400 italic">powered by magic ✨</span>
+          <h1 className="text-2xl font-bold text-white">SCG</h1>
+          <span className="text-sm text-purple-200 italic">powered by magic ✨</span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg 
-                   transition-colors duration-200 text-sm font-medium"
-        >
-          Logout
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          <span className="text-sm text-white/80">Connected</span>
+        </div>
       </header>
 
-      {/* Shell Container */}
-      <div className="flex-1 relative">
+      {/* Shell Container with custom styling */}
+      <div className="flex-1 relative bg-gradient-to-br from-gray-900 via-purple-900/20 to-indigo-900/20">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <div className="text-center">
+              <div className="text-4xl mb-4 animate-pulse">✨</div>
+              <p className="text-white/90">Initializing cloud shell...</p>
+            </div>
+          </div>
+        )}
         <iframe
           ref={iframeRef}
           src={shellUrl}
           className="w-full h-full border-0"
-          allow="clipboard-read; clipboard-write"
-          title="Google Cloud Shell"
-          style={{ minHeight: 'calc(100vh - 60px)' }}
+          allow="clipboard-read; clipboard-write; fullscreen"
+          title="SCG Cloud Shell"
+          style={{ 
+            minHeight: 'calc(100vh - 60px)',
+            background: 'transparent'
+          }}
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+          onLoad={() => setLoading(false)}
         />
       </div>
+
+      {/* Inject global styles via shadow DOM approach */}
+      <style jsx global>{`
+        iframe {
+          filter: brightness(1.05) contrast(1.02);
+        }
+      `}</style>
     </div>
   );
 }
-
