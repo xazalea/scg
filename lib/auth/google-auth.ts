@@ -59,10 +59,10 @@ export class GoogleAuthManager {
     const { tokens } = await this.oauth2Client.getToken(code);
     return {
       access_token: tokens.access_token || '',
-      refresh_token: tokens.refresh_token,
-      expiry_date: tokens.expiry_date,
-      scope: tokens.scope as string,
-      token_type: tokens.token_type,
+      refresh_token: tokens.refresh_token || undefined,
+      expiry_date: tokens.expiry_date || undefined,
+      scope: tokens.scope as string | undefined,
+      token_type: tokens.token_type || undefined,
     };
   }
 
@@ -78,10 +78,10 @@ export class GoogleAuthManager {
     
     return {
       access_token: credentials.access_token || '',
-      refresh_token: credentials.refresh_token || refreshToken,
-      expiry_date: credentials.expiry_date,
-      scope: credentials.scope as string,
-      token_type: credentials.token_type,
+      refresh_token: credentials.refresh_token || refreshToken || undefined,
+      expiry_date: credentials.expiry_date || undefined,
+      scope: credentials.scope as string | undefined,
+      token_type: credentials.token_type || undefined,
     };
   }
 
