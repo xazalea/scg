@@ -31,7 +31,7 @@ export async function createSession(data: SessionData): Promise<string> {
 export async function verifySession(token: string): Promise<SessionData | null> {
   try {
     const { payload } = await jwtVerify(token, secret);
-    return payload as SessionData;
+    return payload as unknown as SessionData;
   } catch (error) {
     return null;
   }
