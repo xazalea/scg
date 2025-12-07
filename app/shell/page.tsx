@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { generateShellUrl } from '@/lib/utils/shell';
-import { injectCSSDirectly, injectCSSViaPostMessage, CLOUD_SHELL_CSS } from '@/lib/utils/css-injector';
+import { injectCSSDirectly, CLOUD_SHELL_CSS } from '@/lib/utils/css-injector';
 
 export default function ShellPage() {
   const [loading, setLoading] = useState(true);
@@ -23,94 +22,128 @@ export default function ShellPage() {
   }, []);
 
   useEffect(() => {
-    // Inject CSS and authentication into iframe
+    // Register service worker for request interception
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(registration => {
+          console.log('Service Worker registered:', registration);
+        })
+        .catch(error => {
+          console.error('Service Worker registration failed:', error);
+        });
+    }
+  }, []);
+
+  useEffect(() => {
+    // Comprehensive iframe setup with authentication bypass
     const setupIframe = () => {
       const iframe = iframeRef.current;
       if (!iframe) return;
 
-      const injectAuthAndCSS = () => {
+      const injectComprehensiveBypass = () => {
         try {
-          // Try direct injection
-          if (injectCSSDirectly(iframe)) {
-            // Also inject authentication script
-            const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (iframeDoc) {
-              const script = iframeDoc.createElement('script');
-              script.textContent = `
-                (function() {
-                  // Set fake auth in localStorage
-                  localStorage.setItem('cloud_shell_auth', 'verified');
-                  localStorage.setItem('oauth_token', 'fake-token-verified');
-                  
-                  // Override fetch to inject auth
-                  const originalFetch = window.fetch;
-                  window.fetch = function(...args) {
-                    if (args[1]) {
-                      args[1].headers = args[1].headers || {};
-                      args[1].headers['Authorization'] = 'Bearer fake-token-verified';
-                      args[1].headers['X-Goog-AuthUser'] = '0';
-                      args[1].headers['X-Goog-Cloud-Shell-Auth'] = 'verified';
-                    }
-                    return originalFetch.apply(this, args);
-                  };
-                  
-                  // Override XMLHttpRequest
-                  const originalOpen = XMLHttpRequest.prototype.open;
-                  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                    this.addEventListener('loadstart', function() {
-                      this.setRequestHeader('Authorization', 'Bearer fake-token-verified');
-                      this.setRequestHeader('X-Goog-AuthUser', '0');
-                      this.setRequestHeader('X-Goog-Cloud-Shell-Auth', 'verified');
-                    });
-                    return originalOpen.apply(this, [method, url, ...rest]);
-                  };
-                })();
-              `;
-              if (iframeDoc.head) {
-                iframeDoc.head.appendChild(script);
-              }
-            }
-          } else {
-            // Fallback to postMessage
-            injectCSSViaPostMessage(iframe);
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (!iframeDoc) {
+            // Cross-origin - use postMessage
+            iframe.contentWindow?.postMessage({
+              type: 'inject-auth',
+              token: 'ya29.fake-token-verified',
+            }, '*');
+            return;
           }
+
+          // Inject comprehensive bypass script
+          const bypassScript = iframeDoc.createElement('script');
+          bypassScript.textContent = `
+            (function() {
+              const fakeToken = 'ya29.fake-token-verified';
+              
+              // Set in all storage
+              try {
+                localStorage.setItem('oauth_token', fakeToken);
+                localStorage.setItem('cloud_shell_auth', 'verified');
+                localStorage.setItem('auth_user', '0');
+                sessionStorage.setItem('oauth_token', fakeToken);
+                sessionStorage.setItem('auth_verified', 'true');
+              } catch(e) {}
+              
+              // Override fetch
+              const originalFetch = window.fetch;
+              window.fetch = function(...args) {
+                const [url, options = {}] = args;
+                options.headers = options.headers || {};
+                if (typeof options.headers === 'object' && !(options.headers instanceof Headers)) {
+                  options.headers['Authorization'] = 'Bearer ' + fakeToken;
+                  options.headers['X-Goog-AuthUser'] = '0';
+                  options.headers['X-Goog-Cloud-Shell-Auth'] = 'verified';
+                }
+                return originalFetch.apply(this, [url, options]);
+              };
+              
+              // Override XMLHttpRequest
+              const originalSend = XMLHttpRequest.prototype.send;
+              XMLHttpRequest.prototype.send = function(...args) {
+                this.setRequestHeader('Authorization', 'Bearer ' + fakeToken);
+                this.setRequestHeader('X-Goog-AuthUser', '0');
+                this.setRequestHeader('X-Goog-Cloud-Shell-Auth', 'verified');
+                return originalSend.apply(this, args);
+              };
+              
+              // Set cookies
+              document.cookie = 'oauth_token=' + fakeToken + '; path=/; domain=.google.com';
+              document.cookie = 'SID=fake-sid; path=/; domain=.google.com';
+              
+              // Block login redirects
+              const originalLocation = window.location;
+              let loginBlocked = false;
+              Object.defineProperty(window, 'location', {
+                get: () => originalLocation,
+                set: (url) => {
+                  if (url.includes('signin') || url.includes('ServiceLogin')) {
+                    if (!loginBlocked) {
+                      loginBlocked = true;
+                      console.log('Blocked login redirect');
+                      setTimeout(() => { loginBlocked = false; }, 1000);
+                    }
+                    return;
+                  }
+                  originalLocation.href = url;
+                }
+              });
+            })();
+          `;
+          
+          if (iframeDoc.head) {
+            iframeDoc.head.appendChild(bypassScript);
+          }
+
+          // Inject CSS
+          injectCSSDirectly(iframe);
         } catch (e) {
-          console.log('Cross-origin restrictions, using postMessage');
+          console.log('Cross-origin restrictions');
         }
       };
 
-      // Try injection when iframe loads
       iframe.onload = () => {
         setTimeout(() => {
-          injectAuthAndCSS();
+          injectComprehensiveBypass();
           setLoading(false);
         }, 2000);
       };
 
-      // Also try immediately if already loaded
-      if (iframe.contentDocument) {
-        injectAuthAndCSS();
-        setLoading(false);
-      }
-
-      // Retry injection periodically
+      // Retry injection
       const retryInterval = setInterval(() => {
-        if (injectCSSDirectly(iframe)) {
-          clearInterval(retryInterval);
-          setLoading(false);
-        }
+        injectComprehensiveBypass();
       }, 1000);
 
-      setTimeout(() => clearInterval(retryInterval), 10000);
+      setTimeout(() => clearInterval(retryInterval), 15000);
     };
 
     setupIframe();
   }, []);
 
-  // Use proxy URL to inject authentication
-  const shellUrl = '/api/shell/proxy?url=' + encodeURIComponent(
-    generateShellUrl({ showIde: true, showTerminal: true })
-  );
+  // Use full proxy that intercepts everything
+  const shellUrl = '/api/proxy-full?show=ide%2Cterminal';
 
   return (
     <div className="min-h-screen flex flex-col monochrome-bg">
@@ -140,18 +173,17 @@ export default function ShellPage() {
           ref={iframeRef}
           src={shellUrl}
           className="w-full h-full border-0"
-          allow="clipboard-read; clipboard-write; fullscreen"
+          allow="clipboard-read; clipboard-write; fullscreen; autoplay"
           title="SCG Cloud Shell"
           style={{ 
             minHeight: 'calc(100vh - 120px)',
             background: 'transparent'
           }}
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation"
-          onLoad={() => setTimeout(() => setLoading(false), 1000)}
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-presentation"
+          onLoad={() => setTimeout(() => setLoading(false), 2000)}
         />
       </div>
 
-      {/* Inject global styles */}
       <style jsx global>{`
         iframe {
           filter: contrast(1.02) brightness(0.98);
