@@ -78,7 +78,7 @@ export async function GET(
 
     // Get response content
     const contentType = response.headers.get('content-type') || '';
-    let body: string | Buffer = '';
+    let body: string | ArrayBuffer = '';
 
     if (contentType.includes('text/html') || contentType.includes('text/javascript') || contentType.includes('application/javascript')) {
       body = await response.text();
@@ -237,12 +237,19 @@ ${CLOUDSHELL_API_SCRIPT}
         }
       }
     } else {
-      // For non-text content, return as-is
-      body = Buffer.from(await response.arrayBuffer());
+      // For non-text content, return as ArrayBuffer
+      body = await response.arrayBuffer();
     }
 
     // Create response with all headers
-    const modifiedResponse = new NextResponse(body, {
+    // Convert body to proper type for NextResponse
+    const responseBody: BodyInit = typeof body === 'string' 
+      ? body 
+      : body instanceof Buffer 
+        ? new Uint8Array(body) 
+        : body as ArrayBuffer;
+
+    const modifiedResponse = new NextResponse(responseBody, {
       status: response.status,
       statusText: response.statusText,
       headers: {
