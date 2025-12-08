@@ -266,8 +266,8 @@ ${CLOUDSHELL_API_SCRIPT}
       statusText: response.statusText,
       headers: {
         ...Object.fromEntries(originalHeaders.entries()),
-        // Don't set X-Frame-Options - let browser handle it
-        // Or set to SAMEORIGIN if needed
+        // Explicitly set X-Frame-Options to SAMEORIGIN to allow iframe embedding
+        'X-Frame-Options': 'SAMEORIGIN',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': '*',
