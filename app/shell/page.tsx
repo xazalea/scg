@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { injectCSSDirectly, CLOUD_SHELL_CSS } from '@/lib/utils/css-injector';
 
 export default function ShellPage() {
   const [loading, setLoading] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeKey, setIframeKey] = useState(0);
 
   useEffect(() => {
     // Ensure fake authentication is set up
@@ -22,128 +22,122 @@ export default function ShellPage() {
   }, []);
 
   useEffect(() => {
-    // Register service worker for request interception
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(registration => {
-          console.log('Service Worker registered:', registration);
-        })
-        .catch(error => {
-          console.error('Service Worker registration failed:', error);
-        });
-    }
-  }, []);
-
-  useEffect(() => {
-    // Comprehensive iframe setup with authentication bypass
+    // Comprehensive iframe setup with aggressive authentication injection
     const setupIframe = () => {
       const iframe = iframeRef.current;
       if (!iframe) return;
 
-      const injectComprehensiveBypass = () => {
+      // Function to inject authentication
+      const injectAuth = () => {
         try {
-          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          const iframeWindow = iframe.contentWindow;
+          const iframeDoc = iframe.contentDocument || iframeWindow?.document;
+          
           if (!iframeDoc) {
-            // Cross-origin - use postMessage
-            iframe.contentWindow?.postMessage({
-              type: 'inject-auth',
+            // Use postMessage if cross-origin
+            iframeWindow?.postMessage({
+              type: 'SCG_AUTH_INJECT',
               token: 'ya29.fake-token-verified',
+              email: 'user@example.com',
+              userId: '123456789',
             }, '*');
             return;
           }
 
-          // Inject comprehensive bypass script
-          const bypassScript = iframeDoc.createElement('script');
-          bypassScript.textContent = `
+          // Inject comprehensive authentication script
+          const authScript = iframeDoc.createElement('script');
+          authScript.id = 'scg-auth-bypass';
+          authScript.textContent = `
             (function() {
-              const fakeToken = 'ya29.fake-token-verified';
+              const FAKE_TOKEN = 'ya29.fake-token-verified';
+              const FAKE_EMAIL = 'user@example.com';
+              const FAKE_USER_ID = '123456789';
               
               // Set in all storage
               try {
-                localStorage.setItem('oauth_token', fakeToken);
+                localStorage.setItem('oauth_token', FAKE_TOKEN);
                 localStorage.setItem('cloud_shell_auth', 'verified');
-                localStorage.setItem('auth_user', '0');
-                sessionStorage.setItem('oauth_token', fakeToken);
+                localStorage.setItem('auth_verified', 'true');
+                sessionStorage.setItem('oauth_token', FAKE_TOKEN);
                 sessionStorage.setItem('auth_verified', 'true');
               } catch(e) {}
               
               // Override fetch
               const originalFetch = window.fetch;
               window.fetch = function(...args) {
-                const [url, options = {}] = args;
-                options.headers = options.headers || {};
-                if (typeof options.headers === 'object' && !(options.headers instanceof Headers)) {
-                  options.headers['Authorization'] = 'Bearer ' + fakeToken;
-                  options.headers['X-Goog-AuthUser'] = '0';
-                  options.headers['X-Goog-Cloud-Shell-Auth'] = 'verified';
+                if (args[1]) {
+                  args[1].headers = args[1].headers || {};
+                  args[1].headers['Authorization'] = 'Bearer ' + FAKE_TOKEN;
+                  args[1].headers['X-Goog-AuthUser'] = '0';
+                  args[1].headers['X-Goog-Cloud-Shell-Auth'] = 'verified';
                 }
-                return originalFetch.apply(this, [url, options]);
+                return originalFetch.apply(this, args);
               };
               
               // Override XMLHttpRequest
               const originalSend = XMLHttpRequest.prototype.send;
               XMLHttpRequest.prototype.send = function(...args) {
-                this.setRequestHeader('Authorization', 'Bearer ' + fakeToken);
+                this.setRequestHeader('Authorization', 'Bearer ' + FAKE_TOKEN);
                 this.setRequestHeader('X-Goog-AuthUser', '0');
                 this.setRequestHeader('X-Goog-Cloud-Shell-Auth', 'verified');
                 return originalSend.apply(this, args);
               };
               
-              // Set cookies
-              document.cookie = 'oauth_token=' + fakeToken + '; path=/; domain=.google.com';
-              document.cookie = 'SID=fake-sid; path=/; domain=.google.com';
-              
               // Block login redirects
-              const originalLocation = window.location;
-              let loginBlocked = false;
-              Object.defineProperty(window, 'location', {
-                get: () => originalLocation,
-                set: (url) => {
-                  if (url.includes('signin') || url.includes('ServiceLogin')) {
-                    if (!loginBlocked) {
-                      loginBlocked = true;
-                      console.log('Blocked login redirect');
-                      setTimeout(() => { loginBlocked = false; }, 1000);
-                    }
-                    return;
-                  }
-                  originalLocation.href = url;
+              const originalReplace = window.location.replace;
+              window.location.replace = function(url) {
+                if (url && url.includes('accounts.google.com/signin')) {
+                  console.log('Blocked login redirect');
+                  return;
                 }
-              });
+                return originalReplace.apply(this, arguments);
+              };
             })();
           `;
           
           if (iframeDoc.head) {
-            iframeDoc.head.appendChild(bypassScript);
+            const existing = iframeDoc.getElementById('scg-auth-bypass');
+            if (existing) existing.remove();
+            iframeDoc.head.appendChild(authScript);
           }
-
-          // Inject CSS
-          injectCSSDirectly(iframe);
         } catch (e) {
-          console.log('Cross-origin restrictions');
+          console.log('Cross-origin, using postMessage');
         }
       };
 
+      // Listen for iframe load
       iframe.onload = () => {
         setTimeout(() => {
-          injectComprehensiveBypass();
+          injectAuth();
           setLoading(false);
         }, 2000);
       };
 
-      // Retry injection
-      const retryInterval = setInterval(() => {
-        injectComprehensiveBypass();
-      }, 1000);
+      // Also listen for postMessage from iframe
+      window.addEventListener('message', (event) => {
+        if (event.data?.type === 'SCG_AUTH_REQUEST') {
+          iframe.contentWindow?.postMessage({
+            type: 'SCG_AUTH_RESPONSE',
+            token: 'ya29.fake-token-verified',
+            email: 'user@example.com',
+            userId: '123456789',
+          }, '*');
+        }
+      });
 
-      setTimeout(() => clearInterval(retryInterval), 15000);
+      // Retry injection periodically
+      const retryInterval = setInterval(() => {
+        injectAuth();
+      }, 3000);
+
+      setTimeout(() => clearInterval(retryInterval), 30000);
     };
 
     setupIframe();
-  }, []);
+  }, [iframeKey]);
 
-  // Use full proxy that intercepts everything
-  const shellUrl = '/api/proxy-full?show=ide%2Cterminal';
+  // Use full proxy for all requests
+  const shellUrl = '/api/proxy-full/?show=ide%2Cterminal';
 
   return (
     <div className="min-h-screen flex flex-col monochrome-bg">
@@ -156,6 +150,15 @@ export default function ShellPage() {
         <div className="flex items-center gap-2">
           <div className="status-indicator"></div>
           <span className="text-xs text-gray-600">connected</span>
+          <button
+            onClick={() => {
+              setIframeKey(prev => prev + 1);
+              setLoading(true);
+            }}
+            className="text-xs text-gray-500 hover:text-gray-700 ml-4"
+          >
+            reload
+          </button>
         </div>
       </header>
 
@@ -170,6 +173,7 @@ export default function ShellPage() {
           </div>
         )}
         <iframe
+          key={iframeKey}
           ref={iframeRef}
           src={shellUrl}
           className="w-full h-full border-0"
@@ -184,14 +188,32 @@ export default function ShellPage() {
         />
       </div>
 
-      <style jsx global>{`
-        iframe {
-          filter: contrast(1.02) brightness(0.98);
-        }
-        body {
-          background: #f5f5f5;
-        }
-      `}</style>
+      {/* Inject global authentication interceptor */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              // Intercept all fetch requests before iframe loads
+              const originalFetch = window.fetch;
+              window.fetch = function(...args) {
+                const [url, options = {}] = args;
+                
+                // If it's a Google request, add auth
+                if (typeof url === 'string' && url.includes('google.com')) {
+                  options.headers = options.headers || {};
+                  if (typeof options.headers === 'object' && !(options.headers instanceof Headers)) {
+                    options.headers['Authorization'] = 'Bearer ya29.fake-token-verified';
+                    options.headers['X-Goog-AuthUser'] = '0';
+                    options.headers['X-Goog-Cloud-Shell-Auth'] = 'verified';
+                  }
+                }
+                
+                return originalFetch.apply(this, [url, options]);
+              };
+            })();
+          `,
+        }}
+      />
     </div>
   );
 }

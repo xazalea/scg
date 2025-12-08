@@ -3,8 +3,7 @@ import { createFakeCredentials, getFakeAuthHeaders, getFakeAuthCookies } from '@
 import { createSession } from '@/lib/auth/session';
 
 /**
- * Create a fake authenticated session
- * This endpoint generates fake credentials and stores them in a session
+ * Create a fake authenticated session with comprehensive credentials
  */
 export async function GET(request: NextRequest) {
   try {
@@ -27,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const sessionToken = await createSession(sessionData);
 
-    // Create response with session cookie
+    // Create response
     const response = NextResponse.json({
       success: true,
       credentials: {
@@ -42,21 +41,30 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: 7 * 24 * 60 * 60,
     });
 
-    // Also set fake Google cookies to trick the iframe
+    // Store fake credentials in a separate cookie for easy access
+    response.cookies.set('scg_fake_creds', JSON.stringify(fakeCreds), {
+      httpOnly: false, // Allow JavaScript access
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60,
+    });
+
+    // Set fake Google cookies to trick the browser
     const fakeCookies = getFakeAuthCookies(fakeCreds);
     fakeCookies.forEach(cookie => {
-      const [nameValue, ...attributes] = cookie.split(';');
+      const [nameValue] = cookie.split(';');
       const [name, value] = nameValue.split('=');
-      response.cookies.set(name.trim(), value.trim(), {
-        httpOnly: cookie.includes('HttpOnly'),
-        secure: cookie.includes('Secure'),
-        sameSite: cookie.includes('SameSite=None') ? 'none' : 'lax',
-        path: '/',
-        domain: '.google.com',
-      });
+      if (name && value) {
+        response.cookies.set(name.trim(), value.trim(), {
+          httpOnly: cookie.includes('HttpOnly'),
+          secure: cookie.includes('Secure'),
+          sameSite: cookie.includes('SameSite=None') ? 'none' : 'lax',
+          path: '/',
+        });
+      }
     });
 
     return response;
@@ -68,4 +76,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
