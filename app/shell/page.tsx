@@ -153,8 +153,12 @@ export default function ShellPage() {
     setupIframe();
   }, [iframeKey]);
 
-  // Use proxy URL - the proxy will handle all requests
+  // Always use proxy URL - never load Google URLs directly
   // shellUrl is set in useEffect, defaults to proxy
+  // If somehow a direct Google URL is set, convert it to use proxy
+  const finalShellUrl = shellUrl.startsWith('http') && shellUrl.includes('google.com')
+    ? `/api/proxy-full/?url=${encodeURIComponent(shellUrl)}`
+    : shellUrl;
 
   return (
     <div className="min-h-screen flex flex-col monochrome-bg">
@@ -192,7 +196,7 @@ export default function ShellPage() {
         <iframe
           key={iframeKey}
           ref={iframeRef}
-          src={shellUrl}
+          src={finalShellUrl}
           className="w-full h-full border-0"
           allow="clipboard-read; clipboard-write; fullscreen; autoplay; camera; microphone"
           title="SCG Cloud Shell"
