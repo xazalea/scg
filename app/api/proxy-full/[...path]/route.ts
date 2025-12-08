@@ -18,13 +18,20 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams.toString();
     
     // If no path, use the root Cloud Shell URL with query params
+    // Try to use console.cloud.google.com first as it might have less restrictions
     let targetUrl: string;
     if (!path && searchParams) {
-      targetUrl = `https://shell.cloud.google.com/?${searchParams}`;
+      // Try console.cloud.google.com first, fallback to shell.cloud.google.com
+      targetUrl = `https://console.cloud.google.com/cloudshell/editor?${searchParams}`;
     } else if (path) {
-      targetUrl = `https://shell.cloud.google.com/${path}${searchParams ? '?' + searchParams : ''}`;
+      // If path starts with specific routes, use console, otherwise use shell
+      if (path.startsWith('editor') || path.startsWith('terminal')) {
+        targetUrl = `https://console.cloud.google.com/cloudshell/${path}${searchParams ? '?' + searchParams : ''}`;
+      } else {
+        targetUrl = `https://shell.cloud.google.com/${path}${searchParams ? '?' + searchParams : ''}`;
+      }
     } else {
-      targetUrl = 'https://shell.cloud.google.com/?show=ide%2Cterminal';
+      targetUrl = 'https://console.cloud.google.com/cloudshell/editor?show=ide%2Cterminal';
     }
 
     // Get or create fake credentials
@@ -249,15 +256,22 @@ ${CLOUDSHELL_API_SCRIPT}
         ? new Uint8Array(body) 
         : body as ArrayBuffer;
 
+    // Get original headers and remove conflicting X-Frame-Options
+    const originalHeaders = new Headers(response.headers);
+    originalHeaders.delete('X-Frame-Options'); // Remove Google's DENY
+    originalHeaders.delete('Content-Security-Policy'); // Remove CSP that might block us
+    
     const modifiedResponse = new NextResponse(responseBody, {
       status: response.status,
       statusText: response.statusText,
       headers: {
-        ...Object.fromEntries(response.headers.entries()),
-        'X-Frame-Options': 'ALLOWALL',
+        ...Object.fromEntries(originalHeaders.entries()),
+        // Don't set X-Frame-Options - let browser handle it
+        // Or set to SAMEORIGIN if needed
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': '*',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
 

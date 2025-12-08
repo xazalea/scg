@@ -150,6 +150,7 @@ export default function ShellPage() {
     setupIframe();
   }, [iframeKey]);
 
+  // Use proxy URL - the proxy will handle all requests
   // shellUrl is set in useEffect, defaults to proxy
 
   return (
@@ -190,14 +191,18 @@ export default function ShellPage() {
           ref={iframeRef}
           src={shellUrl}
           className="w-full h-full border-0"
-          allow="clipboard-read; clipboard-write; fullscreen; autoplay"
+          allow="clipboard-read; clipboard-write; fullscreen; autoplay; camera; microphone"
           title="SCG Cloud Shell"
           style={{ 
             minHeight: 'calc(100vh - 120px)',
             background: 'transparent'
           }}
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-presentation"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-presentation allow-downloads"
           onLoad={() => setTimeout(() => setLoading(false), 2000)}
+          onError={() => {
+            console.error('Iframe load error');
+            setLoading(false);
+          }}
         />
       </div>
 
