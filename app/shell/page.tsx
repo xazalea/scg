@@ -7,12 +7,26 @@ export default function ShellPage() {
   const [loading, setLoading] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeKey, setIframeKey] = useState(0);
+  const [shellUrl, setShellUrl] = useState('/api/proxy-full/?show=ide%2Cterminal&authuser=0');
 
   useEffect(() => {
-    // Ensure fake authentication is set up
+    // Ensure fake authentication is set up and create Cloud Shell session
     const ensureAuth = async () => {
       try {
+        // Create fake auth
         await axios.get('/api/auth/fake', { withCredentials: true });
+        
+        // Try to create Cloud Shell session via direct API
+        try {
+          const sessionResponse = await axios.post('/api/cloudshell/create-session', {}, { withCredentials: true });
+          if (sessionResponse.data.sessionUrl) {
+            // Use the session URL if available
+            setShellUrl(sessionResponse.data.sessionUrl);
+          }
+        } catch (e) {
+          // Fallback to proxy if API fails
+          console.log('Using proxy fallback');
+        }
       } catch (error) {
         console.error('Auth setup error:', error);
       }
@@ -136,8 +150,7 @@ export default function ShellPage() {
     setupIframe();
   }, [iframeKey]);
 
-  // Use full proxy for all requests - proxy will handle the root path
-  const shellUrl = '/api/proxy-full/?show=ide%2Cterminal&authuser=0';
+  // shellUrl is set in useEffect, defaults to proxy
 
   return (
     <div className="min-h-screen flex flex-col monochrome-bg">
