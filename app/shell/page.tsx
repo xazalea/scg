@@ -136,8 +136,8 @@ export default function ShellPage() {
     setupIframe();
   }, [iframeKey]);
 
-  // Use full proxy for all requests
-  const shellUrl = '/api/proxy-full/?show=ide%2Cterminal';
+  // Use full proxy for all requests - proxy will handle the root path
+  const shellUrl = '/api/proxy-full/?show=ide%2Cterminal&authuser=0';
 
   return (
     <div className="min-h-screen flex flex-col monochrome-bg">

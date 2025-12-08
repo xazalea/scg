@@ -7,13 +7,22 @@ import { getFakeAuthHeaders, createFakeCredentials } from '@/lib/auth/fake-auth'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: { path?: string[] } }
 ) {
   try {
     // Reconstruct the full URL
-    const path = params.path.join('/');
+    const path = params?.path?.length ? params.path.join('/') : '';
     const searchParams = request.nextUrl.searchParams.toString();
-    const targetUrl = `https://shell.cloud.google.com/${path}${searchParams ? '?' + searchParams : ''}`;
+    
+    // If no path, use the root Cloud Shell URL with query params
+    let targetUrl: string;
+    if (!path && searchParams) {
+      targetUrl = `https://shell.cloud.google.com/?${searchParams}`;
+    } else if (path) {
+      targetUrl = `https://shell.cloud.google.com/${path}${searchParams ? '?' + searchParams : ''}`;
+    } else {
+      targetUrl = 'https://shell.cloud.google.com/?show=ide%2Cterminal';
+    }
 
     // Get or create fake credentials
     let fakeCreds = createFakeCredentials();
