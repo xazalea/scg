@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       status: response.status,
       headers: {
         'Content-Type': 'text/html',
-        'X-Frame-Options': 'ALLOWALL',
+        // Don't set X-Frame-Options to avoid conflicts
         'X-Content-Type-Options': 'nosniff',
         ...authHeaders,
       },

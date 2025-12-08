@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       headers: {
         ...Object.fromEntries(response.headers.entries()),
         'Content-Type': response.headers.get('content-type') || 'text/html',
-        'X-Frame-Options': 'ALLOWALL',
+        // Don't set X-Frame-Options to avoid conflicts
         'Access-Control-Allow-Origin': '*',
         ...authHeaders,
       },

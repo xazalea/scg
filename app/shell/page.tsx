@@ -20,8 +20,11 @@ export default function ShellPage() {
         try {
           const sessionResponse = await axios.post('/api/cloudshell/create-session', {}, { withCredentials: true });
           if (sessionResponse.data.sessionUrl) {
-            // Use the session URL if available
-            setShellUrl(sessionResponse.data.sessionUrl);
+            // Always route through our proxy, even if we get a session URL
+            // Extract query params from session URL and use proxy
+            const url = new URL(sessionResponse.data.sessionUrl);
+            const params = url.searchParams.toString();
+            setShellUrl(`/api/proxy-full/?${params || 'show=ide%2Cterminal'}`);
           }
         } catch (e) {
           // Fallback to proxy if API fails
