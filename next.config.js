@@ -9,15 +9,6 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
-          },
-        ],
-      },
-      {
         source: '/api/proxy-full/:path*',
         headers: [
           {
@@ -32,10 +23,7 @@ const nextConfig = {
             key: 'Access-Control-Allow-Headers',
             value: '*',
           },
-          {
-            key: 'X-Frame-Options',
-            value: 'ALLOWALL',
-          },
+          // Don't set X-Frame-Options here - let proxy handle it
         ],
       },
       {
